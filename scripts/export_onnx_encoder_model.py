@@ -143,7 +143,8 @@ class OnnxEncoderModel(nn.Module):
         """
 
         # Normalization
-        input_image = (input_image - self.pixel_mean) / self.pixel_std
+        # input_image = (input_image - self.pixel_mean) / self.pixel_std
+        input_image = input_image / 255
 
         # permute channels
         input_image = torch.permute(input_image, (2, 0, 1))

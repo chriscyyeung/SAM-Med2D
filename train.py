@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch
 import argparse
 import os
+import json
 from torch import optim
 from torch.utils.data import DataLoader
 from DataLoader import TrainingDataset, stack_dict_batched
@@ -115,6 +116,9 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
         else:
             batched_input["boxes"] = None
             flag = "point"
+        
+        # disable prompting
+        batched_input = setting_prompt_none(batched_input)
 
         for n, value in model.image_encoder.named_parameters():
             if "Adapter" in n:
@@ -174,6 +178,9 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
 
         init_mask_num = np.random.randint(1, args.iter_point - 1)
         for iter in range(args.iter_point):
+            # disable prompting
+            batched_input = setting_prompt_none(batched_input)
+            
             if iter == init_mask_num or iter == args.iter_point - 1:
                 batched_input = setting_prompt_none(batched_input)
 
@@ -205,7 +212,7 @@ def train_one_epoch(args, model, optimizer, train_loader, epoch, criterion):
             print(f"epoch:{epoch+1}, iteration:{batch+1}, loss:{loss.item()}")
             save_path = os.path.join(f"{args.work_dir}/models", args.run_name, f"epoch{epoch+1}_batch{batch+1}_sam.pth")
             state = {'model': model.state_dict(), 'optimizer': optimizer}
-            torch.save(state, save_path)
+            # torch.save(state, save_path)
 
         train_losses.append(loss.item())
 

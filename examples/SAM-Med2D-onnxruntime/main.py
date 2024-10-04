@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 import matplotlib.pyplot as plt
+import torch
 
 from tqdm import tqdm
 from typing import Any, Union
@@ -142,7 +143,8 @@ class SamEncoder:
         input_image = img[..., ::-1]
 
         # Normalization
-        input_image = (input_image - self.pixel_mean) / self.pixel_std
+        # input_image = (input_image - self.pixel_mean) / self.pixel_std
+        input_image = input_image / 255
 
         # Resize
         input_image = cv2.resize(input_image, self.input_size, cv2.INTER_NEAREST)
@@ -313,6 +315,7 @@ def main():
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     base_name, file_extension = os.path.splitext(os.path.basename(args.img_path))
+    file_extension = ".png"
 
     # Initialize the SAM-Med2D onnx model
     encoder = SamEncoder(
@@ -324,12 +327,16 @@ def main():
     )
 
     '''Specifying a specific object with a point'''
-    img_file = cv2.imread(args.img_path)
+    # img_file = cv2.imread(args.img_path)
+    img_file = np.load(args.img_path)
+    img_file = np.repeat(img_file[:, :, 0][:, :, np.newaxis], 3, axis=-1)  # (H, W, 3)
     img_embeddings = encoder(img_file)
     
     origin_image_size = img_file.shape[:2]
-    point_coords = np.array([[162, 127]], dtype=np.float32)
-    point_labels = np.array([1], dtype=np.float32)
+    # point_coords = np.array([[162, 127]], dtype=np.float32)
+    # point_labels = np.array([1], dtype=np.float32)
+    point_coords = np.random.uniform(low=0, high=256, size=(1, 2)).astype(np.float32)
+    point_labels = np.random.uniform(low=0, high=1, size=1).astype(np.float32)
     masks, _, logits = decoder.run(
         img_embeddings=img_embeddings,
         origin_image_size=origin_image_size,
@@ -346,10 +353,10 @@ def main():
     plt.show()  
 
     '''Optimizing Segmentation Results by Point Interaction'''
-    new_point_coords = np.array([[169, 140]], dtype=np.float32)
-    new_point_labels = np.array([0], dtype=np.float32)
-    point_coords = np.concatenate((point_coords, new_point_coords))
-    point_labels = np.concatenate((point_labels, new_point_labels))
+    # new_point_coords = np.array([[169, 140]], dtype=np.float32)
+    # new_point_labels = np.array([0], dtype=np.float32)
+    # point_coords = np.concatenate((point_coords, new_point_coords))
+    # point_labels = np.concatenate((point_labels, new_point_labels))
     mask_inputs = 1. / (1. + np.exp(-logits.astype(np.float32)))
 
     masks, _, logits = decoder.run(
@@ -357,7 +364,7 @@ def main():
         origin_image_size=origin_image_size,
         point_coords=point_coords,
         point_labels=point_labels,
-        mask_input = mask_inputs,
+        mask_input = mask_inputs
     )
 
     plt.figure(figsize=(10,10))
@@ -369,12 +376,13 @@ def main():
     plt.show()
 
     '''Specifying a specific object with a bounding box'''
-    boxes = np.array([135,100,180,150])
+    # boxes = np.array([135,100,180,150])
+    boxes = np.random.uniform(low=0, high=256, size=4).astype(np.float32)
 
     masks, _, _ = decoder.run(
         img_embeddings=img_embeddings,
         origin_image_size=origin_image_size,
-        boxes=boxes,
+        boxes=boxes
     )
     plt.figure(figsize=(10,10))
     plt.imshow(img_file)

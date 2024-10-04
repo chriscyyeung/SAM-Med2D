@@ -263,7 +263,9 @@ def save_masks(preds, save_path, mask_name, image_size, original_size, pad=None,
                 cv2.drawMarker(mask, (x, y), color, markerType=cv2.MARKER_CROSS , markerSize=7, thickness=2)  
     os.makedirs(save_path, exist_ok=True)
     mask_path = os.path.join(save_path, f"{mask_name}")
-    cv2.imwrite(mask_path, np.uint8(mask))
+    # cv2.imwrite(mask_path, np.uint8(mask))
+    mask_path = mask_path.replace("npy", "png")
+    cv2.imwrite(mask_path, mask)
 
 
 #Loss funcation

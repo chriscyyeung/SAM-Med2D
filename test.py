@@ -159,6 +159,7 @@ def main(args):
 
         if args.boxes_prompt:
             save_path = os.path.join(args.work_dir, args.run_name, "boxes_prompt")
+            # batched_input["boxes"] = None  # promptless
             batched_input["point_coords"], batched_input["point_labels"] = None, None
             masks, low_res_masks, iou_predictions = prompt_and_decoder(args, batched_input, model, image_embeddings)
             points_show = None

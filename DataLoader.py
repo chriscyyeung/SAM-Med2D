@@ -54,13 +54,18 @@ class TestingDataset(Dataset):
         """
         image_input = {}
         try:
-            image = cv2.imread(self.image_paths[index])
-            image = (image - self.pixel_mean) / self.pixel_std
+            # image = cv2.imread(self.image_paths[index])
+            # image = (image - self.pixel_mean) / self.pixel_std
+            image = np.load(self.image_paths[index])  # (H, W, 1)
+            image = np.repeat(image[:, :, 0][:, :, np.newaxis], 3, axis=-1)  # (H, W, 3)
+            image = image / 255
         except:
             print(self.image_paths[index])
 
         mask_path = self.label_paths[index]
-        ori_np_mask = cv2.imread(mask_path, 0)
+        # ori_np_mask = cv2.imread(mask_path, 0)
+        ori_np_mask = np.load(mask_path)
+        ori_np_mask = ori_np_mask[:, :, 0]
         
         if ori_np_mask.max() == 255:
             ori_np_mask = ori_np_mask / 255
@@ -75,8 +80,11 @@ class TestingDataset(Dataset):
         image, mask = augments['image'], augments['mask'].to(torch.int64)
 
         if self.prompt_path is None:
-            boxes = get_boxes_from_mask(mask, max_pixel = 0)
-            point_coords, point_labels = init_point_sampling(mask, self.point_num)
+            # boxes = get_boxes_from_mask(mask, max_pixel = 0)
+            # point_coords, point_labels = init_point_sampling(mask, self.point_num)
+            boxes = torch.empty((1, 4))
+            point_coords = torch.empty((1, 2))
+            point_labels = torch.empty(1)
         else:
             prompt_key = mask_path.split('/')[-1]
             boxes = torch.as_tensor(self.prompt_list[prompt_key]["boxes"], dtype=torch.float)
@@ -139,8 +147,12 @@ class TrainingDataset(Dataset):
 
         image_input = {}
         try:
-            image = cv2.imread(self.image_paths[index])
-            image = (image - self.pixel_mean) / self.pixel_std
+            # image = cv2.imread(self.image_paths[index])
+            # image = (image - self.pixel_mean) / self.pixel_std
+            image = np.load(self.image_paths[index])  # (H, W, 1)
+            image = np.repeat(image[:, :, 0][:, :, np.newaxis], 3, axis=-1)  # (H, W, 3)
+            image = image / 255
+            # image = np.repeat(image, 3, axis=-1)  # (H, W, 3)
         except:
             print(self.image_paths[index])
 
@@ -152,15 +164,20 @@ class TrainingDataset(Dataset):
         point_coords_list, point_labels_list = [], []
         mask_path = random.choices(self.label_paths[index], k=self.mask_num)
         for m in mask_path:
-            pre_mask = cv2.imread(m, 0)
+            # pre_mask = cv2.imread(m, 0)
+            pre_mask = np.load(m)
+            pre_mask = pre_mask[:, :, 0]
             if pre_mask.max() == 255:
                 pre_mask = pre_mask / 255
 
             augments = transforms(image=image, mask=pre_mask)
             image_tensor, mask_tensor = augments['image'], augments['mask'].to(torch.int64)
 
-            boxes = get_boxes_from_mask(mask_tensor)
-            point_coords, point_label = init_point_sampling(mask_tensor, self.point_num)
+            # boxes = get_boxes_from_mask(mask_tensor)
+            # point_coords, point_label = init_point_sampling(mask_tensor, self.point_num)
+            boxes = torch.empty((1, 4))
+            point_coords = torch.empty((1, 2))
+            point_label = torch.empty(1)
 
             masks_list.append(mask_tensor)
             boxes_list.append(boxes)
