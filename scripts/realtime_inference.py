@@ -22,10 +22,12 @@ import cv2
 import numpy as np
 import pyigtl
 import torch
+import albumentations as A
 from pathlib import Path
 from torch.nn import functional as F
 from scipy.ndimage import map_coordinates
 from scipy.spatial import Delaunay
+from albumentations.pytorch import ToTensorV2
 
 from segment_anything import sam_model_registry
 
@@ -163,17 +165,28 @@ def curvilinear_mask(scanconversion_config):
 def preprocess_input(image, image_size, scanconversion_config=None, x_cart=None, y_cart=None):
     if scanconversion_config is not None:
         # Scan convert image from curvilinear to linear
-        num_samples = scanconversion_config["num_samples_along_lines"]
-        num_lines = scanconversion_config["num_lines"]
-        image = np.zeros((1, num_lines, num_samples))
-        image[0, :, :] = map_coordinates(image[0, :, :], [x_cart, y_cart], order=1, mode='constant', cval=0.0)
+        ori_w = scanconversion_config["num_samples_along_lines"]
+        ori_h = scanconversion_config["num_lines"]
+        image_sc = np.zeros((1, ori_h, ori_w))
+        image_sc[0, :, :] = map_coordinates(image[0, :, :], [x_cart, y_cart], order=1, mode='constant', cval=0.0)
+    else:
+        ori_h, ori_w = image.shape[1], image.shape[2]
 
     # image from slicer is (1, H, W)
-    image = np.repeat(image[0, ...][:, :, np.newaxis], 3, axis=-1)  # (H, w, 3)
+    image = np.repeat(image_sc[0, ...][:, :, np.newaxis], 3, axis=-1)  # (H, w, 3)
+    # image = image[np.newaxis, ...]  # add batch dimension
     image = image / 255
-    image = torch.from_numpy(image)
-    image = torch.permute(image, (2, 0, 1))
-    image = F.interpolate(image.unsqueeze(0), size=image_size, mode="nearest")
+
+    transforms = []
+    if ori_h < image_size and ori_w < image_size:
+        transforms.append(A.PadIfNeeded(min_height=image_size, min_width=image_size, border_mode=cv2.BORDER_CONSTANT, value=(0, 0, 0)))
+    else:
+        transforms.append(A.Resize(int(image_size), int(image_size), interpolation=cv2.INTER_NEAREST))
+    transforms.append(ToTensorV2(p=1.0))
+    augment = A.Compose(transforms, p=1.)
+    augmented = augment(image=image)
+    image = augmented["image"].unsqueeze(0)
+
     return image
 
 
@@ -186,18 +199,25 @@ def postprocess_masks(low_res_masks, image_size, original_size, scanconversion_c
         align_corners=False,
         )
     masks = torch.sigmoid(masks).cpu()
-    
+
     if scanconversion_config:
         # resize to scan conversion size
-        sc_h = scanconversion_config["num_lines"]
-        sc_w = scanconversion_config["num_samples_along_lines"]
-        masks = F.interpolate(masks, (sc_h, sc_w), mode="bilinear", align_corners=False)
+        ori_h = scanconversion_config["num_lines"]
+        ori_w = scanconversion_config["num_samples_along_lines"]
+        if ori_h < image_size and ori_w < image_size:
+            top = torch.div((image_size - ori_h), 2, rounding_mode='trunc')  #(image_size - ori_h) // 2
+            left = torch.div((image_size - ori_w), 2, rounding_mode='trunc') #(image_size - ori_w) // 2
+            masks = masks[..., top : ori_h + top, left : ori_w + left]
+            pad = (top, left)
+        else:
+            masks = F.interpolate(masks, (ori_h, ori_w), mode="bilinear", align_corners=False)
 
         # Scan convert prediction from linear to curvilinear
         masks = scan_convert(masks[0], scanconversion_config, vertices, weights)
         masks = torch.from_numpy(masks).unsqueeze(0).unsqueeze(0)
-    
-    masks = F.interpolate(masks, original_size, mode="bilinear", align_corners=False)  # resize to original slicer size
+    else:
+        masks = F.interpolate(masks, original_size, mode="nearest")  # resize to original slicer size
+
     masks = masks.squeeze().numpy() * 255  # remove batch dimension = (1, H, W)
     if mask_array is not None:
         masks = masks * mask_array
