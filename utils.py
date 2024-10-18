@@ -160,10 +160,22 @@ def init_point_sampling(mask, get_point=1):
 
 def train_transforms(img_size, ori_h, ori_w):
     transforms = []
+    # resize
     if ori_h < img_size and ori_w < img_size:
         transforms.append(A.PadIfNeeded(min_height=img_size, min_width=img_size, border_mode=cv2.BORDER_CONSTANT, value=(0, 0, 0)))
     else:
         transforms.append(A.Resize(int(img_size), int(img_size), interpolation=cv2.INTER_NEAREST))
+    
+    # train augmentations
+    transforms.append(A.HorizontalFlip())
+    transforms.append(A.Affine(
+        scale=(0.9, 1.1), 
+        translate_percent=(0.0, 0.1),
+        rotate=(-30, 30), 
+        shear=(-15, 15)
+    ))
+    transforms.append(A.RandomBrightnessContrast())
+
     transforms.append(ToTensorV2(p=1.0))
     return A.Compose(transforms, p=1.)
 
